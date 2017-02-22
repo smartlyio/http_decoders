@@ -56,6 +56,36 @@ describe HttpDecoders::GZip do
     decompressed.size.should eq(32907)
   end
 
+  it "should decompress concatenated streams" do
+    decompressed = ""
+
+    gz = HttpDecoders::GZip.new do |data|
+      decompressed << data
+    end
+
+    gz << compressed + compressed
+
+    gz.finalize!
+
+    expect(decompressed).to eq("hi\nhi\n")
+  end
+
+  it "should decompress concatenated streams byte by byte" do
+    decompressed = ""
+
+    gz = HttpDecoders::GZip.new do |data|
+      decompressed << data
+    end
+
+    (compressed * 2).each_char do |byte|
+      gz << byte
+    end
+
+    gz.finalize!
+
+    expect(decompressed).to eq("hi\nhi\n")
+  end
+
   it "should not care how many chunks the file is split up into" do
     examples = [
       ["\x1F", "\x8B", "\b", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\x00", "\xF3", "\xCB", "/", "Q", "p\xCB/\xCDK\x01\x00M\x8Ct\xB1\t\x00\x00\x00"],
