@@ -228,25 +228,11 @@ module HttpDecoders
     end
 
     def decompress(compressed)
-      @header ||= GZipHeader.new
-      if !@header.finished?
-        compressed = @header.extract_stream(compressed)
-      end
-
-      if @buffer
-        @buffer << compressed
-        decompress_buffer
-      else
-        @zstream ||= Zlib::Inflate.new(-Zlib::MAX_WBITS)
-        decompressed = @zstream.inflate(compressed)
-
-        # Gzip tailer with CRC32 and length is included after deflate stream.
-        # Buffer input until we get a magic string indicating a new stream.
-        @buffer = [compressed[1..-1]] if @header.finished? && @zstream.finished?
-        decompressed + decompress_buffer.to_s
-      end
-    rescue Zlib::Error
-      raise DecoderError
+      compressed
+        .force_encoding(Encoding::ASCII_8BIT)
+        .each_line(MAGIC_STRING)
+        .map { |chunk| decompress_chunk(chunk) }
+        .join('')
     end
 
     def finalize
@@ -264,6 +250,31 @@ module HttpDecoders
     end
 
     private
+
+    def decompress_chunk(compressed)
+      @header ||= GZipHeader.new
+      if !@header.finished?
+        compressed = @header.extract_stream(compressed)
+      end
+
+      if @buffer
+        @buffer << compressed
+        decompress_buffer
+      else
+        @zstream ||= Zlib::Inflate.new(-Zlib::MAX_WBITS)
+        decompressed = @zstream.inflate(compressed)
+
+        # Gzip tailer with CRC32 and length is included after deflate stream.
+        # Buffer input including magic byte
+        if @header.finished? && @zstream.finished?
+          @buffer = []
+          @buffer << MAGIC_STRING if compressed.end_with?(MAGIC_STRING)
+        end
+        decompressed.to_s
+      end
+    rescue Zlib::Error
+      raise DecoderError
+    end
 
     def decompress_buffer
       next_stream = find_stream(@buffer.join) if @buffer
