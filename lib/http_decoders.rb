@@ -216,20 +216,23 @@ module HttpDecoders
   end
 
   class GZip < Base
+    MAGIC_STRING = "\x1F\x8B".force_encoding(Encoding::ASCII_8BIT).freeze
+
     def self.encoding_names
       %w(gzip compressed)
     end
 
-    def decompress(compressed)
-      @header ||= GZipHeader.new
-      if !@header.finished?
-        compressed = @header.extract_stream(compressed)
-      end
+    def initialize
+      super
+      @buffer = nil
+    end
 
-      @zstream ||= Zlib::Inflate.new(-Zlib::MAX_WBITS)
-      @zstream.inflate(compressed)
-    rescue Zlib::Error
-      raise DecoderError
+    def decompress(compressed)
+      compressed
+        .force_encoding(Encoding::ASCII_8BIT)
+        .each_line(MAGIC_STRING)
+        .map { |chunk| decompress_chunk(chunk) }
+        .join('')
     end
 
     def finalize
@@ -246,6 +249,56 @@ module HttpDecoders
       raise DecoderError
     end
 
+    private
+
+    def decompress_chunk(compressed)
+      @header ||= GZipHeader.new
+      if !@header.finished?
+        compressed = @header.extract_stream(compressed)
+      end
+
+      if @buffer
+        @buffer << compressed
+        decompress_buffer
+      else
+        @zstream ||= Zlib::Inflate.new(-Zlib::MAX_WBITS)
+        decompressed = @zstream.inflate(compressed)
+
+        # Gzip tailer with CRC32 and length is included after deflate stream.
+        # Buffer input including magic byte
+        if @header.finished? && @zstream.finished?
+          @buffer = []
+          @buffer << MAGIC_STRING if compressed.end_with?(MAGIC_STRING)
+        end
+        decompressed.to_s
+      end
+    rescue Zlib::Error
+      raise DecoderError
+    end
+
+    def decompress_buffer
+      next_stream = find_stream(@buffer.join) if @buffer
+      return unless next_stream
+
+      @buffer = nil
+      decompressed = finalize.to_s
+      reset
+      decompressed + decompress(next_stream)
+    end
+
+    def find_stream(decompressed)
+      index = decompressed.force_encoding(Encoding::ASCII_8BIT).index(MAGIC_STRING)
+      if index
+        decompressed[index..-1]
+      else
+        nil
+      end
+    end
+
+    def reset
+      @header = nil
+      @zstream = nil
+    end
   end
 
   DECODERS = [Deflate, GZip]
