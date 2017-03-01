@@ -2,6 +2,8 @@
 
 Decompress HTTP responses. Supports deflate and gzip. Extracted from [em-http-request](https://github.com/igrigorik/em-http-request).
 
+[![Build Status](https://travis-ci.org/smartlyio/http_decoders.svg?branch=master)](https://travis-ci.org/smartlyio/http_decoders)
+
 ## Installation
 
 Add this line to your application's Gemfile:
