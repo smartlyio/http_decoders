@@ -74,8 +74,8 @@ module HttpDecoders
       begin
         @zstream ||= Zlib::Inflate.new(-Zlib::MAX_WBITS)
         @zstream.inflate(compressed)
-      rescue Zlib::Error
-        raise DecoderError
+      rescue Zlib::Error => e
+        raise DecoderError, e
       end
     end
 
@@ -86,8 +86,8 @@ module HttpDecoders
         r = @zstream.inflate(nil)
         @zstream.close
         r
-      rescue Zlib::Error
-        raise DecoderError
+      rescue Zlib::Error => e
+        raise DecoderError, e
       end
     end
   end
@@ -245,8 +245,8 @@ module HttpDecoders
       else
         nil
       end
-    rescue Zlib::Error
-      raise DecoderError
+    rescue Zlib::Error => e
+      raise DecoderError, e
     end
 
     private
@@ -272,8 +272,8 @@ module HttpDecoders
         end
         decompressed.to_s
       end
-    rescue Zlib::Error
-      raise DecoderError
+    rescue Zlib::Error => e
+      raise DecoderError, e
     end
 
     def decompress_buffer
